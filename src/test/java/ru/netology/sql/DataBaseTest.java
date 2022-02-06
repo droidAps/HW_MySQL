@@ -1,16 +1,12 @@
 package ru.netology.sql;
 
-import ru.netology.clean.CleanTables;
+import ru.netology.base.DBHelper;
 import ru.netology.data.DataHelper;
 import ru.netology.data.User;
-import com.github.javafaker.Faker;
 import lombok.SneakyThrows;
 import org.apache.commons.dbutils.QueryRunner;
-import org.apache.commons.dbutils.handlers.*;
 import org.junit.jupiter.api.*;
 import ru.netology.page.LoginPage;
-
-import java.sql.DriverManager;
 
 import static com.codeborne.selenide.Selenide.open;
 
@@ -19,26 +15,22 @@ public class DataBaseTest {
     @BeforeEach
     @SneakyThrows
     void setUp() {
-        var faker = new Faker();
         var runner = new QueryRunner();
-        var firstPass = DataHelper.getFirstPassword();
-        var secondPass = DataHelper.getSecondPassword();
-        var dataSQL = "INSERT INTO users(id, login, password) VALUES (?, ?, ?);";
+        var firstPass = DataHelper.getFirstPassword().getEncryptedPassword();
+        var secondPass = DataHelper.getSecondPassword().getEncryptedPassword();
 
         try (
-                var conn = DriverManager.getConnection(
-                        "jdbc:mysql://localhost:3306/mydb", "user", "pass"
-                );
+                var conn = DBHelper.connectInDatabase("mydb", "user", "pass");
 
         ) { // удаление данных из таблиц БД
-            CleanTables.cleanAllTables(conn, runner);
+            DBHelper.cleanAllTables(conn, runner);
 
             // вставка тестовых данных
-            runner.update(conn, dataSQL, 1, faker.name().username(), firstPass.getEncryptedPassword());
-            runner.update(conn, dataSQL, 2, faker.name().username(), secondPass.getEncryptedPassword());
-            runner.update(conn, dataSQL, 3, faker.name().username(), firstPass.getEncryptedPassword());
-            runner.update(conn, dataSQL, 4, faker.name().username(), firstPass.getEncryptedPassword());
-            runner.update(conn, dataSQL, 5, faker.name().username(), secondPass.getEncryptedPassword());
+            DBHelper.addUserInDatabase(conn, runner, 1, firstPass);
+            DBHelper.addUserInDatabase(conn, runner, 2, secondPass);
+            DBHelper.addUserInDatabase(conn, runner, 3, firstPass);
+            DBHelper.addUserInDatabase(conn, runner, 4, firstPass);
+            DBHelper.addUserInDatabase(conn, runner, 5, secondPass);
         }
     }
 
@@ -52,22 +44,17 @@ public class DataBaseTest {
     void authorizationTest() {
         int idUser = 5;
         var pass = DataHelper.getSecondPassword().getPassword();
-        var userSQL = "SELECT login FROM users WHERE id = " + idUser;
-        var codeSQL = "SELECT code FROM auth_codes WHERE user_id = " + idUser +
-                " ORDER BY created DESC LIMIT 1;";
         var runner = new QueryRunner();
 
         try (
-                var conn = DriverManager.getConnection(
-                        "jdbc:mysql://localhost:3306/mydb", "user", "pass"
-                );
+                var conn = DBHelper.connectInDatabase("mydb", "user", "pass");
         ) {
-            String userName = runner.query(conn, userSQL, new ScalarHandler<>());
+            String userName = DBHelper.getUserLogin(conn, runner, idUser);
             var user = new User(idUser, userName, pass);
 
             var loginPage = new LoginPage();
             var verificationPage = loginPage.validLogin(user);
-            String verificationCode = runner.query(conn, codeSQL, new ScalarHandler<>());
+            String verificationCode = DBHelper.getVerificationCode(conn, runner, idUser);
             var dashboardPage = verificationPage.validVerify(verificationCode);
         }
     }
@@ -77,23 +64,30 @@ public class DataBaseTest {
     void errorMessageTest() {
         int idUser = 3;
         var pass = DataHelper.getFirstPassword().getPassword();
-        var userSQL = "SELECT login FROM users WHERE id = " + idUser;
-        var codeSQL = "SELECT code FROM auth_codes WHERE user_id = " + idUser +
-                " ORDER BY created DESC LIMIT 1;";
         var runner = new QueryRunner();
 
         try (
-                var conn = DriverManager.getConnection(
-                        "jdbc:mysql://localhost:3306/mydb", "user", "pass"
-                );
+                var conn = DBHelper.connectInDatabase("mydb", "user", "pass");
         ) {
-            String userName = runner.query(conn, userSQL, new ScalarHandler<>());
+            String userName = DBHelper.getUserLogin(conn, runner, idUser);
             var user = new User(idUser, userName, pass);
-
             var loginPage = new LoginPage();
-            InvalidMethods.incorrectInput3Times(loginPage, user);
+
+            // 3 раза выполняем попытку входа в л/к с невалидным верификационным кодом
             var verificationPage = loginPage.validLogin(user);
-            String verificationCode = runner.query(conn, codeSQL, new ScalarHandler<>());
+            verificationPage.invalidVerify(DataHelper.getInvalidCode());
+            openURL();
+            verificationPage = loginPage.validLogin(user);
+            verificationPage.invalidVerify(DataHelper.getInvalidCode());
+            openURL();
+            verificationPage = loginPage.validLogin(user);
+            verificationPage.invalidVerify(DataHelper.getInvalidCode());
+
+            // выполняем попытку входа в л/к с валидным верификационным кодом
+            openURL();
+            verificationPage = loginPage.validLogin(user);
+            String verificationCode = DBHelper.getVerificationCode(conn, runner, idUser);
+
             verificationPage.checkError(verificationCode);
         }
     }
