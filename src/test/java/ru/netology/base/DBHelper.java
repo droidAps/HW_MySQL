@@ -9,47 +9,65 @@ import java.sql.Connection;
 import java.sql.DriverManager;
 
 public class DBHelper {
+    private static String url = "jdbc:mysql://localhost:3306/";
+    private static String nameDB = "mydb";
+    private static String user = "user";
+    private static String password = "pass";
+
     private DBHelper() {
     }
 
     @SneakyThrows
-    public static void cleanAllTables(Connection conn, QueryRunner runner) {
-        var cleanUsers = "DELETE FROM users;";
-        var cleanCards = "DELETE FROM cards;";
-        var cleanCardTransactions = "DELETE FROM card_transactions;";
-        var cleanAuthCodes = "DELETE FROM auth_codes;";
+    public static void cleanAllTables() {
+        var runner = new QueryRunner();
+        try (
+                var conn = DriverManager.getConnection(url + nameDB, user, password);
+        ) {
+            var cleanUsers = "DELETE FROM users;";
+            var cleanCards = "DELETE FROM cards;";
+            var cleanCardTransactions = "DELETE FROM card_transactions;";
+            var cleanAuthCodes = "DELETE FROM auth_codes;";
 
-        runner.update(conn, cleanCardTransactions);
-        runner.update(conn, cleanAuthCodes);
-        runner.update(conn, cleanCards);
-        runner.update(conn, cleanUsers);
+            runner.update(conn, cleanCardTransactions);
+            runner.update(conn, cleanAuthCodes);
+            runner.update(conn, cleanCards);
+            runner.update(conn, cleanUsers);
+        }
     }
 
     @SneakyThrows
-    public static String getUserLogin(Connection conn, QueryRunner runner, int idUser) {
-        var userSQL = "SELECT login FROM users WHERE id = " + idUser;
-        String userName = runner.query(conn, userSQL, new ScalarHandler<>());
-        return userName;
+    public static String getUserLogin(int idUser) {
+        var runner = new QueryRunner();
+        try (
+                var conn = DriverManager.getConnection(url + nameDB, user, password);
+        ) {
+            var userSQL = "SELECT login FROM users WHERE id = " + idUser;
+            String userName = runner.query(conn, userSQL, new ScalarHandler<>());
+            return userName;
+        }
     }
 
     @SneakyThrows
-    public static String getVerificationCode(Connection conn, QueryRunner runner, int idUser) {
-        var codeSQL = "SELECT code FROM auth_codes WHERE user_id = " + idUser +
-                " ORDER BY created DESC LIMIT 1;";
-        String verificationCode = runner.query(conn, codeSQL, new ScalarHandler<>());
-        return verificationCode;
+    public static String getVerificationCode(int idUser) {
+        var runner = new QueryRunner();
+        try (
+                var conn = DriverManager.getConnection(url + nameDB, user, password);
+        ) {
+            var codeSQL = "SELECT code FROM auth_codes WHERE user_id = " + idUser +
+                    " ORDER BY created DESC LIMIT 1;";
+            String verificationCode = runner.query(conn, codeSQL, new ScalarHandler<>());
+            return verificationCode;
+        }
     }
 
     @SneakyThrows
-    public static void addUserInDatabase(Connection conn, QueryRunner runner, int id, String password) {
-        var dataSQL = "INSERT INTO users(id, login, password) VALUES (?, ?, ?);";
-        runner.update(conn, dataSQL, id, DataHelper.getRandomLogin(), password);
-    }
-
-    @SneakyThrows
-    public static Connection connectInDatabase(String database, String user, String password) {
-        var conn = DriverManager.getConnection(
-                "jdbc:mysql://localhost:3306/" + database, user, password);
-        return conn;
+    public static void addUserInDatabase(int id, String pass) {
+        var runner = new QueryRunner();
+        try (
+                var conn = DriverManager.getConnection(url + nameDB, user, password);
+        ) {
+            var dataSQL = "INSERT INTO users(id, login, password) VALUES (?, ?, ?);";
+            runner.update(conn, dataSQL, id, DataHelper.getRandomLogin(), pass);
+        }
     }
 }
